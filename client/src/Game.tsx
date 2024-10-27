@@ -1,68 +1,95 @@
 import * as React from "react";
 import { io, Socket } from "socket.io-client";
-import DotAndBoxes from "./Components/DotAndBoxes";
 
 const socket: Socket = io("http://localhost:5001");
 
 interface Player {
-  id: string;
+  score: number;
 }
 
 const Game: React.FunctionComponent = () => {
-  const [currentUser, setCurrentUser] = React.useState<string | null>(null);
-  const [playerTwo, setPlayerTwo] = React.useState<string | null>(null);
-  const [message, setMessage] = React.useState("");
-
+  const [message, setMessage] = React.useState<string>("");
+  const [playerId, setPlayerId] = React.useState<string | null>(null); // Track player ID
+  const [player1, setPlayer1] = React.useState<Player | null>(null);
+  const [player2, setPlayer2] = React.useState<Player | null>(null);
   React.useEffect(() => {
     // Connect to the socket
     socket.on("connect", () => {
       console.log("Connected to server");
-      setCurrentUser(socket.id ?? null);
+      console.log("Socket ID:", socket.id);
+      setPlayerId(socket.id as string); // Set the player ID once connected
     });
 
     // Listen for player join events
-    socket.on("player-joined", (room: Player[]) => {
-      console.log(room);
+    socket.on("player-joined", (players: Record<string, Player>) => {
+      console.log(players);
+      const playerKeys = Object.keys(players);
+      if (playerKeys.length > 0) {
+        setPlayer1({ score: players[playerKeys[0]].score });
+      }
+      if (playerKeys.length == 2) {
+        setPlayer2({ score: players[playerKeys[1]].score });
+      }
+    });
 
-      // Find the second player who is not the current user
-      const secondPlayer = room.find((player) => player.id !== currentUser);
-
-      // Only update playerTwo if a second player exists and it's not the current user
-      if (secondPlayer) {
-        setPlayerTwo(secondPlayer.id);
-      } else {
-        setPlayerTwo(null); // Reset if there's no valid second player
+    // Listen for score updates
+    socket.on("score-updated", (players: Record<string, Player>) => {
+      console.log("Score updated:", players);
+      const playerKeys = Object.keys(players);
+      if (playerKeys.length > 0) {
+        setPlayer1({ score: players[playerKeys[0]].score });
+      }
+      if (playerKeys.length == 2) {
+        setPlayer2({ score: players[playerKeys[1]].score });
       }
     });
 
     // Handle room full message
     socket.on("room-full", (msg) => {
       setMessage(msg);
-      console.log(msg); // Log the message or show it in the UI
+      console.log(msg);
     });
 
     // Handle user disconnection
     socket.on("user-disconnected", (id: string) => {
       console.log("User disconnected:", id);
-      // Optionally handle player disconnection logic here
     });
 
     // Cleanup to avoid memory leaks
     return () => {
       socket.off("connect");
       socket.off("player-joined");
+      socket.off("score-updated");
       socket.off("room-full");
       socket.off("user-disconnected");
     };
-  }, [currentUser]); // Added currentUser to the dependencies
+  }, []);
+
+  // ======================= USER EVENTS =============================
+  const handleOnClick = () => {
+    console.log("button clicked by: ", { playerId });
+    socket.emit("changeScore", playerId);
+  };
 
   return (
     <>
-      <div>Game</div>
-      <div>User ID: {currentUser}</div>
-      <div>Player Two ID: {playerTwo}</div>
-      <div>{message}</div> {/* Display the message if room is full */}
-      <DotAndBoxes />
+      <div>Dot Box Game</div>
+      {message ? (
+        <div> {message}</div>
+      ) : (
+        <div>
+          <div>Player One:</div>
+          <div>Score: {player1 ? player1.score : "Not connected"}</div>
+
+          <div>
+            <div>Player Two:</div>
+            <div>Score: {player2 ? player2.score : "Not connected"}</div>
+          </div>
+          <div>
+            <button onClick={handleOnClick}>Click me</button>
+          </div>
+        </div>
+      )}
     </>
   );
 };
