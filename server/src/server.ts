@@ -3,7 +3,6 @@ import dotenv from "dotenv";
 import cors from "cors";
 import { Server } from "socket.io";
 import { createServer } from "http";
-import { connection } from "mongoose";
 
 dotenv.config();
 const port = process.env.PORT || 5001;
@@ -18,74 +17,148 @@ const io = new Server(server, {
   },
 });
 
-// 1. Server connection
-// 2. Create players state, store them as socket key as id
-// 3. Each player will increase their respective scoreState
-
 // ======================= STATES =============================
+
 interface Player {
   score: number;
 }
 
-const players: Record<string, Player> = {}; // Holds the players
+const players: Record<string, Player> = {};
 
-const gameState = {
-  players, // Reference players here
-  currentPlayer: "",
-  boardState: "",
-  playerState: "",
-  gameStatus: "",
+interface Box {
+  topWall: boolean;
+  bottomWall: boolean;
+  leftWall: boolean;
+  rightWall: boolean;
+  x1: number;
+  y1: number;
+  height: number;
+  width: number;
+  color: string;
+  isCompleted: boolean;
+  completedBy: string;
+}
+
+// ================== Initial Board ==============
+
+const initBoard = (
+  rows: number,
+  cols: number,
+  startX: number,
+  startY: number,
+  width: number,
+  height: number
+): Box[][] => {
+  const board: Box[][] = [];
+  for (let i = 0; i < rows; i++) {
+    const row: Box[] = [];
+    for (let j = 0; j < cols; j++) {
+      const box: Box = {
+        topWall: false,
+        bottomWall: false,
+        leftWall: false,
+        rightWall: false,
+        x1: startX + j * width,
+        y1: startY + i * height,
+        height: height,
+        width: width,
+        color: "gray",
+        isCompleted: false,
+        completedBy: "",
+      };
+      row.push(box);
+    }
+    board.push(row);
+  }
+  return board;
 };
 
+const gameState = {
+  players,
+  currentPlayer: "",
+  board: initBoard(3, 3, 20, 20, 60, 60),
+};
+gameState.board.forEach((row) => {
+  row.forEach((box) => {
+    console.log(box);
+  });
+});
+
 // ======================= EVENTS =============================
+
 io.on("connection", (socket) => {
   console.log(`New connection: ${socket.id}`);
 
-  // Room Full
-  if (Object.keys(players).length == 2) {
+  if (Object.keys(players).length === 2) {
     console.log("The room is full.");
-    socket.emit("room-full", "The room is full. Wait for game to finish..");
+    socket.emit("room-full", "The room is full. Wait for the game to finish..");
     socket.disconnect(true);
-  } else {
-    // Add the new player to the players object
-    players[socket.id] = {
-      score: 0,
-    };
+    return;
+  }
+
+  // Add the new player
+  players[socket.id] = { score: 0 };
+
+  // Set Current Player to the first player who connected
+  if (Object.keys(players).length === 1) {
+    gameState.currentPlayer = socket.id;
   }
 
   io.emit("player-joined", players);
-  console.log(players);
 
-  //===== Score =====
-  socket.on("changeScore", (id) => {
-    players[id].score += 1;
+  io.emit("initial-game-state", gameState);
 
-    console.log(`Player score:${id} : ${players[id].score}`);
-    io.emit("score-updated", players);
-    console.log(players);
+  // console.log(players);
+
+  // Handle score and game state updates, deterine scores
+  // const updateGameState = (id: string) => {
+  //   if (id !== gameState.currentPlayer) return;
+
+  //   players[id].score += 1;
+
+  //   // Switch current player
+  //   const playerKeys = Object.keys(players);
+  //   gameState.currentPlayer = playerKeys[1 - playerKeys.indexOf(id)]; // Switch players
+
+  //   console.log(`Player score:${id} : ${players[id].score}`);
+  //   io.emit("score-updated", players);
+  //   io.emit("game-state-updated", gameState);
+  //   console.log("Game status: ", gameState);
+  // };
+
+  // socket.on("changeScore", updateGameState);
+
+  socket.on("board-state-updated", (updatedBoard) => {
+    // console.log("Received updated board state:", updatedBoard);
+    gameState.board = updatedBoard;
+    io.emit("game-state-updated", gameState);
   });
 
-  // Handle player disconnection
-  socket.on("disconnect", () => {
-    // Remove the player from the players object on disconnect
-    delete players[socket.id];
-    console.log(players);
+  // Handle Game Status: win, draw
 
-    // Notify other players that a user has disconnected
-    io.emit("user-disconnected", socket.id);
+  socket.on("disconnect", () => {
+    delete players[socket.id];
     console.log(
       `User disconnected: ${socket.id}. Current players: ${
         Object.keys(players).length
       }`
     );
+
+    io.emit("user-disconnected", socket.id);
+
+    // If a player disconnects, update currentPlayer to the remaining player
+    if (Object.keys(players).length === 1) {
+      gameState.currentPlayer = Object.keys(players)[0];
+      io.emit("game-state-updated", gameState);
+    }
   });
 });
 
 // ======================= MIDDLEWARE =============================
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Cors
 app.use(
   cors({
     origin: "http://localhost:5173",

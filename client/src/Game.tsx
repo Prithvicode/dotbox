@@ -1,5 +1,6 @@
 import * as React from "react";
 import { io, Socket } from "socket.io-client";
+import Board from "./Components/Board";
 
 const socket: Socket = io("http://localhost:5001");
 
@@ -7,52 +8,70 @@ interface Player {
   score: number;
 }
 
+interface Box {
+  topWall: boolean;
+  bottomWall: boolean;
+  leftWall: boolean;
+  rightWall: boolean;
+  x1: number;
+  y1: number;
+  height: number;
+  width: number;
+  color: string;
+  isCompleted: boolean;
+  completedBy: string;
+}
+
+interface GameState {
+  board: Box[][];
+  currentPlayer: string;
+  players: Record<string, Player>;
+}
+
 const Game: React.FunctionComponent = () => {
   const [message, setMessage] = React.useState<string>("");
-  const [playerId, setPlayerId] = React.useState<string | null>(null); // Track player ID
-  const [player1, setPlayer1] = React.useState<Player | null>(null);
-  const [player2, setPlayer2] = React.useState<Player | null>(null);
+  const [playerId, setPlayerId] = React.useState<string | null>(null);
+  const [players, setPlayers] = React.useState<Record<string, Player>>({});
+  const [currentPlayer, setCurrentPlayer] = React.useState<string | null>(null);
+  const [gameState, setGameState] = React.useState<GameState | null>(null);
+
   React.useEffect(() => {
-    // Connect to the socket
     socket.on("connect", () => {
       console.log("Connected to server");
       console.log("Socket ID:", socket.id);
-      setPlayerId(socket.id as string); // Set the player ID once connected
+      setPlayerId(socket.id as string);
     });
 
-    // Listen for player join events
     socket.on("player-joined", (players: Record<string, Player>) => {
       console.log(players);
-      const playerKeys = Object.keys(players);
-      if (playerKeys.length > 0) {
-        setPlayer1({ score: players[playerKeys[0]].score });
-      }
-      if (playerKeys.length == 2) {
-        setPlayer2({ score: players[playerKeys[1]].score });
-      }
+      setPlayers(players);
     });
 
-    // Listen for score updates
-    socket.on("score-updated", (players: Record<string, Player>) => {
-      console.log("Score updated:", players);
-      const playerKeys = Object.keys(players);
-      if (playerKeys.length > 0) {
-        setPlayer1({ score: players[playerKeys[0]].score });
-      }
-      if (playerKeys.length == 2) {
-        setPlayer2({ score: players[playerKeys[1]].score });
-      }
+    socket.on("initial-game-state", (gameState) => {
+      setGameState(gameState);
     });
 
-    // Handle room full message
+    socket.on("game-state-updated", (newGameState: GameState) => {
+      setGameState(newGameState);
+      setCurrentPlayer(newGameState.currentPlayer);
+    });
+
+    socket.on("score-updated", (updatedPlayers: Record<string, Player>) => {
+      console.log("Score updated:", updatedPlayers);
+      setPlayers(updatedPlayers);
+    });
+
     socket.on("room-full", (msg) => {
       setMessage(msg);
       console.log(msg);
     });
 
-    // Handle user disconnection
     socket.on("user-disconnected", (id: string) => {
       console.log("User disconnected:", id);
+      setPlayers((prevPlayers) => {
+        const { [id]: _, ...remainingPlayers } = prevPlayers; // Remove disconnected player
+        return remainingPlayers;
+      });
     });
 
     // Cleanup to avoid memory leaks
@@ -60,6 +79,7 @@ const Game: React.FunctionComponent = () => {
       socket.off("connect");
       socket.off("player-joined");
       socket.off("score-updated");
+      socket.off("game-state-updated");
       socket.off("room-full");
       socket.off("user-disconnected");
     };
@@ -67,26 +87,32 @@ const Game: React.FunctionComponent = () => {
 
   // ======================= USER EVENTS =============================
   const handleOnClick = () => {
-    console.log("button clicked by: ", { playerId });
+    console.log("Button clicked by:", { playerId });
     socket.emit("changeScore", playerId);
   };
-
   return (
     <>
       <div>Dot Box Game</div>
       {message ? (
-        <div> {message}</div>
+        <div>{message}</div>
       ) : (
         <div>
-          <div>Player One:</div>
-          <div>Score: {player1 ? player1.score : "Not connected"}</div>
-
+          {Object.entries(players).map(([id, player]) => (
+            <div key={id}>
+              <div>{`Player ${id}:`}</div>
+              <div>{`Score: ${player.score}`}</div>
+            </div>
+          ))}
           <div>
-            <div>Player Two:</div>
-            <div>Score: {player2 ? player2.score : "Not connected"}</div>
+            <button
+              onClick={handleOnClick}
+              disabled={currentPlayer !== playerId} // Disable if current player is not the connected player
+            >
+              Click me
+            </button>
           </div>
           <div>
-            <button onClick={handleOnClick}>Click me</button>
+            {gameState && <Board gameState={gameState} socket={socket} />}
           </div>
         </div>
       )}
