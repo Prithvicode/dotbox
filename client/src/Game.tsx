@@ -42,24 +42,28 @@ const Game: React.FunctionComponent = () => {
       setPlayerId(socket.id as string);
     });
 
-    socket.on("player-joined", (players: Record<string, Player>) => {
-      console.log(players);
-      setPlayers(players);
-    });
+    // socket.on("player-joined", (players: Record<string, Player>) => {
+    //   console.log(players);
+    //   setPlayers(players);
+    // });
 
     socket.on("initial-game-state", (gameState) => {
       setGameState(gameState);
+      setPlayers(gameState.players);
     });
 
     socket.on("game-state-updated", (newGameState: GameState) => {
       setGameState(newGameState);
+      setPlayers(newGameState.players);
       setCurrentPlayer(newGameState.currentPlayer);
     });
 
-    socket.on("score-updated", (updatedPlayers: Record<string, Player>) => {
-      console.log("Score updated:", updatedPlayers);
-      setPlayers(updatedPlayers);
-    });
+    // socket.on("score-updated", (updatedPlayers: Record<string, Player>) => {
+    //   console.log("Score updated:", updatedPlayers);
+    //   setPlayers(updatedPlayers);
+    // });
+
+    // Check Game Status for Winner; draw, winner: playerId
 
     socket.on("room-full", (msg) => {
       setMessage(msg);
@@ -114,6 +118,7 @@ const Game: React.FunctionComponent = () => {
           <div>
             {gameState && <Board gameState={gameState} socket={socket} />}
           </div>
+          {/* Game Status: win or draw */}
         </div>
       )}
     </>

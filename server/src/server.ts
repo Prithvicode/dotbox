@@ -104,7 +104,7 @@ io.on("connection", (socket) => {
     gameState.currentPlayer = socket.id;
   }
 
-  io.emit("player-joined", players);
+  // io.emit("player-joined", gameState.players);
 
   io.emit("initial-game-state", gameState);
 
@@ -126,12 +126,32 @@ io.on("connection", (socket) => {
   //   console.log("Game status: ", gameState);
   // };
 
-  // socket.on("changeScore", updateGameState);
+  socket.on("box-completed", (boxCompletedData) => {
+    const { row, col, completedBy } = boxCompletedData;
 
-  socket.on("board-state-updated", (updatedBoard) => {
-    // console.log("Received updated board state:", updatedBoard);
-    gameState.board = updatedBoard;
+    gameState.players[completedBy].score += 10;
+
+    gameState.board[row][col].isCompleted = true;
+    gameState.board[row][col].completedBy = completedBy; // color box accordinlgy in ui
+
+    console.log("Complete box: ", gameState.board[row][col]);
+    console.log(
+      `Completed by: ${completedBy}, score: ${gameState.players[completedBy].score}`
+    );
     io.emit("game-state-updated", gameState);
+    console.log(gameState.players);
+  });
+
+  socket.on("board-state-updated", (updatedGameState) => {
+    // console.log("Received updated board state:", updatedBoard);
+    gameState.board = updatedGameState.board;
+    // Toggle currentPlayer
+    const playerKeys = Object.keys(players);
+    gameState.currentPlayer =
+      playerKeys[1 - playerKeys.indexOf(updatedGameState.currentPlayer)]; // Switch players
+
+    io.emit("game-state-updated", gameState);
+    console.log(gameState.players);
   });
 
   // Handle Game Status: win, draw

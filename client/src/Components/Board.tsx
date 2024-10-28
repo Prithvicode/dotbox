@@ -161,7 +161,11 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
   }
 
   // =============== EVENTS =================
+  // Disable the event if currentPlayer != socket.id
+  // Toggle the current Player
+
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (socket.id != gameState.currentPlayer) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -188,6 +192,7 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
   };
 
   const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (socket.id != gameState.currentPlayer) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -228,8 +233,6 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
             const j = parseInt(colIndex);
 
             updateWallState(i, j, index);
-
-            checkBoxCompletion(i, j);
           }
         });
       }
@@ -240,39 +243,68 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
     const updatedBoard = [...gameState.board];
     const box = updatedBoard[i][j];
 
+    let isWallUpdated = false;
+
     switch (sideIndex) {
       case 0:
-        box.leftWall = true;
+        if (!box.leftWall) {
+          box.leftWall = true;
+          isWallUpdated = true;
+        }
         break;
       case 1:
-        box.rightWall = true;
+        if (!box.rightWall) {
+          box.rightWall = true;
+          isWallUpdated = true;
+        }
         break;
       case 2:
-        box.bottomWall = true;
+        if (!box.bottomWall) {
+          box.bottomWall = true;
+          isWallUpdated = true;
+        }
         break;
       case 3:
-        box.topWall = true;
+        if (!box.topWall) {
+          box.topWall = true;
+          isWallUpdated = true;
+        }
         break;
       default:
         break;
     }
 
-    // Update the game state
-    gameState.board = updatedBoard;
+    if (isWallUpdated) {
+      // Update the game state
+      gameState.board = updatedBoard;
 
-    // Emit board state to server
-    socket.emit("board-state-updated", updatedBoard);
-    // console.log("Board updated:", gameState.board);
+      // Emit board state to server
+      socket.emit("board-state-updated", gameState);
+      console.log(gameState.currentPlayer);
+      // console.log("Board updated:", gameState.board);
+
+      checkBoxCompletion(i, j);
+    } else {
+      console.log("Invalid. Line already exists");
+    }
   };
 
   const checkBoxCompletion = (i: number, j: number) => {
     const box = gameState.board[i][j];
     if (box.topWall && box.bottomWall && box.leftWall && box.rightWall) {
-      box.isCompleted = true;
-      box.completedBy = gameState.currentPlayer;
+      //   box.isCompleted = true;
+      //   box.completedBy = gameState.currentPlayer;
 
-      // Update the player's score, determine hwo much score.
-      //   gameState.players[gameState.currentPlayer].score += 1;
+      const boxCompletedData = {
+        row: i,
+        col: j,
+        box,
+        completedBy: gameState.currentPlayer,
+      };
+
+      console.log(box);
+
+      socket.emit("box-completed", boxCompletedData);
       console.log(
         `Box completed by ${gameState.currentPlayer} at (${i}, ${j})`
       );
