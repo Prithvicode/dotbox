@@ -77,6 +77,8 @@ const gameState = {
   players,
   currentPlayer: "",
   board: initBoard(3, 3, 20, 20, 60, 60),
+  isGameOver: false,
+  winner: "",
 };
 gameState.board.forEach((row) => {
   row.forEach((box) => {
@@ -108,43 +110,48 @@ io.on("connection", (socket) => {
 
   io.emit("initial-game-state", gameState);
 
-  // console.log(players);
+  interface completedBox {
+    row: number;
+    col: number;
+    box: Box;
+    completedBy: string;
+  }
+  socket.on("box-completed", (completedBoxes) => {
+    completedBoxes.forEach((boxData: completedBox) => {
+      const { row, col, completedBy } = boxData;
+      if (gameState.players[completedBy]) {
+        gameState.players[completedBy].score += 10;
+      }
 
-  // Handle score and game state updates, deterine scores
-  // const updateGameState = (id: string) => {
-  //   if (id !== gameState.currentPlayer) return;
+      gameState.board[row][col].isCompleted = true;
+      gameState.board[row][col].completedBy = completedBy;
 
-  //   players[id].score += 1;
+      console.log("Completed box:", gameState.board[row][col]);
+      console.log(
+        `Completed by: ${completedBy}, score: ${gameState.players[completedBy].score}`
+      );
+    });
 
-  //   // Switch current player
-  //   const playerKeys = Object.keys(players);
-  //   gameState.currentPlayer = playerKeys[1 - playerKeys.indexOf(id)]; // Switch players
+    // Toggle current player
+    const playerKeys = Object.keys(players);
+    gameState.currentPlayer =
+      playerKeys[1 - playerKeys.indexOf(gameState.currentPlayer)];
 
-  //   console.log(`Player score:${id} : ${players[id].score}`);
-  //   io.emit("score-updated", players);
-  //   io.emit("game-state-updated", gameState);
-  //   console.log("Game status: ", gameState);
-  // };
+    checkGameStatus();
 
-  socket.on("box-completed", (boxCompletedData) => {
-    const { row, col, completedBy } = boxCompletedData;
-
-    gameState.players[completedBy].score += 10;
-
-    gameState.board[row][col].isCompleted = true;
-    gameState.board[row][col].completedBy = completedBy; // color box accordinlgy in ui
-
-    console.log("Complete box: ", gameState.board[row][col]);
-    console.log(
-      `Completed by: ${completedBy}, score: ${gameState.players[completedBy].score}`
-    );
+    // Emit updated game state
     io.emit("game-state-updated", gameState);
-    console.log(gameState.players);
+    console.log("Players:", gameState.players);
+    console.log(
+      "Current player after box completion:",
+      gameState.currentPlayer
+    );
   });
 
   socket.on("board-state-updated", (updatedGameState) => {
     // console.log("Received updated board state:", updatedBoard);
     gameState.board = updatedGameState.board;
+
     // Toggle currentPlayer
     const playerKeys = Object.keys(players);
     gameState.currentPlayer =
@@ -152,9 +159,41 @@ io.on("connection", (socket) => {
 
     io.emit("game-state-updated", gameState);
     console.log(gameState.players);
+    console.log("CurrentPlayer from boardUpate:", gameState.currentPlayer);
   });
 
-  // Handle Game Status: win, draw
+  const checkGameStatus = () => {
+    let allBoxesCompleted = true;
+    for (let row of gameState.board) {
+      for (let box of row) {
+        if (!box.isCompleted) {
+          allBoxesCompleted = false;
+          break;
+        }
+      }
+    }
+    if (allBoxesCompleted) {
+      gameState.isGameOver = true;
+      determineWinner();
+      io.emit("game-over", gameState);
+      console.log("Game Over. Winner:", gameState.winner);
+    }
+  };
+
+  const determineWinner = () => {
+    const playerKeys = Object.keys(players);
+    const [player1, player2] = playerKeys;
+
+    if (gameState.players[player1].score > gameState.players[player2].score) {
+      gameState.winner = player1;
+    } else if (
+      gameState.players[player1].score < gameState.players[player2].score
+    ) {
+      gameState.winner = player2;
+    } else {
+      gameState.winner = "draw";
+    }
+  };
 
   socket.on("disconnect", () => {
     delete players[socket.id];

@@ -242,72 +242,128 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
   const updateWallState = (i: number, j: number, sideIndex: number) => {
     const updatedBoard = [...gameState.board];
     const box = updatedBoard[i][j];
-
     let isWallUpdated = false;
 
     switch (sideIndex) {
-      case 0:
+      case 0: // Left wall
         if (!box.leftWall) {
           box.leftWall = true;
           isWallUpdated = true;
+
+          // Update right wall of the previous box if it exists
+          if (j > 0) {
+            const previousBox = updatedBoard[i][j - 1];
+            previousBox.rightWall = true;
+          }
         }
         break;
-      case 1:
+
+      case 1: // Right wall
         if (!box.rightWall) {
           box.rightWall = true;
           isWallUpdated = true;
+
+          // Update left wall of the next box if it exists
+          if (j < updatedBoard[i].length - 1) {
+            const nextBox = updatedBoard[i][j + 1];
+            nextBox.leftWall = true;
+          }
         }
         break;
-      case 2:
+
+      case 2: // Bottom wall
         if (!box.bottomWall) {
           box.bottomWall = true;
           isWallUpdated = true;
+
+          // Update top wall of the box below if it exists
+          if (i < updatedBoard.length - 1) {
+            const nextBox = updatedBoard[i + 1][j];
+            nextBox.topWall = true;
+          }
         }
         break;
-      case 3:
+
+      case 3: // Top wall
         if (!box.topWall) {
           box.topWall = true;
           isWallUpdated = true;
+
+          // Update bottom wall of the box above if it exists
+          if (i > 0) {
+            const previousBox = updatedBoard[i - 1][j];
+            previousBox.bottomWall = true;
+          }
         }
         break;
+
       default:
-        break;
+        console.log("Invalid side index");
+        return;
     }
 
     if (isWallUpdated) {
-      // Update the game state
+      // Update game state and emit the updated board
       gameState.board = updatedBoard;
-
-      // Emit board state to server
       socket.emit("board-state-updated", gameState);
-      console.log(gameState.currentPlayer);
-      // console.log("Board updated:", gameState.board);
+      console.log("Wall updated at:", i, j, "side:", sideIndex);
 
       checkBoxCompletion(i, j);
     } else {
-      console.log("Invalid. Line already exists");
+      console.log(
+        "Invalid move. Wall already exists at:",
+        i,
+        j,
+        "side:",
+        sideIndex
+      );
     }
   };
+  interface CompletedBoxData {
+    row: number;
+    col: number;
+    box: Box;
+    completedBy: string;
+  }
 
   const checkBoxCompletion = (i: number, j: number) => {
-    const box = gameState.board[i][j];
-    if (box.topWall && box.bottomWall && box.leftWall && box.rightWall) {
-      //   box.isCompleted = true;
-      //   box.completedBy = gameState.currentPlayer;
+    const completedBoxes: CompletedBoxData[] = [];
 
-      const boxCompletedData = {
-        row: i,
-        col: j,
-        box,
-        completedBy: gameState.currentPlayer,
-      };
+    const checkAndAddBox = (row: number, col: number) => {
+      const box = gameState.board[row]?.[col];
+      if (
+        box &&
+        box.topWall &&
+        box.bottomWall &&
+        box.leftWall &&
+        box.rightWall &&
+        !box.isCompleted
+      ) {
+        completedBoxes.push({
+          row,
+          col,
+          box,
+          completedBy: gameState.currentPlayer,
+        });
 
-      console.log(box);
+        box.isCompleted = true;
+      }
+    };
 
-      socket.emit("box-completed", boxCompletedData);
-      console.log(
-        `Box completed by ${gameState.currentPlayer} at (${i}, ${j})`
-      );
+    // Check current and neighboring boxes
+    checkAndAddBox(i, j);
+    if (i > 0) checkAndAddBox(i - 1, j); // Top neighbor
+    if (i < gameState.board.length - 1) checkAndAddBox(i + 1, j); // Bottom neighbor
+    if (j > 0) checkAndAddBox(i, j - 1); // Left neighbor
+    if (j < gameState.board[i].length - 1) checkAndAddBox(i, j + 1); // Right neighbor
+
+    if (completedBoxes.length > 0) {
+      // completedBoxes.forEach((boxData) => {
+      socket.emit("box-completed", completedBoxes);
+      // console.log(
+      //   `Box completed by ${gameState.currentPlayer} at (${boxData.row}, ${boxData.col})`
+      // );
+      // });
     }
   };
 

@@ -34,6 +34,7 @@ const Game: React.FunctionComponent = () => {
   const [players, setPlayers] = React.useState<Record<string, Player>>({});
   const [currentPlayer, setCurrentPlayer] = React.useState<string | null>(null);
   const [gameState, setGameState] = React.useState<GameState | null>(null);
+  const [gameOver, setGameOver] = React.useState<boolean>(false);
 
   React.useEffect(() => {
     socket.on("connect", () => {
@@ -41,11 +42,6 @@ const Game: React.FunctionComponent = () => {
       console.log("Socket ID:", socket.id);
       setPlayerId(socket.id as string);
     });
-
-    // socket.on("player-joined", (players: Record<string, Player>) => {
-    //   console.log(players);
-    //   setPlayers(players);
-    // });
 
     socket.on("initial-game-state", (gameState) => {
       setGameState(gameState);
@@ -58,12 +54,10 @@ const Game: React.FunctionComponent = () => {
       setCurrentPlayer(newGameState.currentPlayer);
     });
 
-    // socket.on("score-updated", (updatedPlayers: Record<string, Player>) => {
-    //   console.log("Score updated:", updatedPlayers);
-    //   setPlayers(updatedPlayers);
-    // });
-
     // Check Game Status for Winner; draw, winner: playerId
+    socket.on("game-over", (gameState) => {
+      setGameOver(gameState.isGameOver);
+    });
 
     socket.on("room-full", (msg) => {
       setMessage(msg);
@@ -118,7 +112,8 @@ const Game: React.FunctionComponent = () => {
           <div>
             {gameState && <Board gameState={gameState} socket={socket} />}
           </div>
-          {/* Game Status: win or draw */}
+
+          <div>{gameOver && <div> Game is over</div>}</div>
         </div>
       )}
     </>
