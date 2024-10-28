@@ -23,7 +23,7 @@ interface Box {
 }
 
 interface GameState {
-  board: Box[];
+  board: Box[][];
   currentPlayer: string;
   players: Record<string, Player>;
 }
@@ -36,42 +36,36 @@ const Game: React.FunctionComponent = () => {
   const [gameState, setGameState] = React.useState<GameState | null>(null);
 
   React.useEffect(() => {
-    // Connect to the socket
     socket.on("connect", () => {
       console.log("Connected to server");
       console.log("Socket ID:", socket.id);
       setPlayerId(socket.id as string);
     });
 
-    // Listen for player join events
     socket.on("player-joined", (players: Record<string, Player>) => {
       console.log(players);
       setPlayers(players);
     });
 
-    // Initial Game state
     socket.on("initial-game-state", (gameState) => {
       setGameState(gameState);
     });
-    // Listen for game state updates
+
     socket.on("game-state-updated", (newGameState: GameState) => {
       setGameState(newGameState);
       setCurrentPlayer(newGameState.currentPlayer);
     });
 
-    // Listen for score updates
     socket.on("score-updated", (updatedPlayers: Record<string, Player>) => {
       console.log("Score updated:", updatedPlayers);
       setPlayers(updatedPlayers);
     });
 
-    // Handle room full message
     socket.on("room-full", (msg) => {
       setMessage(msg);
       console.log(msg);
     });
 
-    // Handle user disconnection
     socket.on("user-disconnected", (id: string) => {
       console.log("User disconnected:", id);
       setPlayers((prevPlayers) => {
@@ -117,7 +111,6 @@ const Game: React.FunctionComponent = () => {
               Click me
             </button>
           </div>
-          {/* Board component should be rendered here, after the button */}
           <div>
             {gameState && <Board gameState={gameState} socket={socket} />}
           </div>

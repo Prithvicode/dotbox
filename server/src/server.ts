@@ -23,7 +23,7 @@ interface Player {
   score: number;
 }
 
-const players: Record<string, Player> = {}; // Holds the players
+const players: Record<string, Player> = {};
 
 interface Box {
   topWall: boolean;
@@ -40,6 +40,7 @@ interface Box {
 }
 
 // ================== Initial Board ==============
+
 const initBoard = (
   rows: number,
   cols: number,
@@ -47,24 +48,27 @@ const initBoard = (
   startY: number,
   width: number,
   height: number
-): Box[] => {
-  const board: Box[] = [];
+): Box[][] => {
+  const board: Box[][] = [];
   for (let i = 0; i < rows; i++) {
+    const row: Box[] = [];
     for (let j = 0; j < cols; j++) {
-      board.push({
+      const box: Box = {
         topWall: false,
         bottomWall: false,
         leftWall: false,
         rightWall: false,
-        x1: startX + i * width,
-        y1: startY + j * height,
+        x1: startX + j * width,
+        y1: startY + i * height,
         height: height,
         width: width,
         color: "gray",
         isCompleted: false,
         completedBy: "",
-      });
+      };
+      row.push(box);
     }
+    board.push(row);
   }
   return board;
 };
@@ -72,10 +76,13 @@ const initBoard = (
 const gameState = {
   players,
   currentPlayer: "",
-  board: initBoard(7, 7, 20, 20, 60, 60),
+  board: initBoard(3, 3, 20, 20, 60, 60),
 };
-
-console.log(gameState);
+gameState.board.forEach((row) => {
+  row.forEach((box) => {
+    console.log(box);
+  });
+});
 
 // ======================= EVENTS =============================
 
@@ -89,7 +96,7 @@ io.on("connection", (socket) => {
     return;
   }
 
-  // Add the new player to the players object
+  // Add the new player
   players[socket.id] = { score: 0 };
 
   // Set Current Player to the first player who connected
@@ -97,33 +104,38 @@ io.on("connection", (socket) => {
     gameState.currentPlayer = socket.id;
   }
 
-  // Emit player joined event and initial game state to the newly connected client
   io.emit("player-joined", players);
 
   io.emit("initial-game-state", gameState);
 
-  console.log(players);
+  // console.log(players);
 
-  // Handle score and game state updates
-  const updateGameState = (id: string) => {
-    if (id !== gameState.currentPlayer) return;
+  // Handle score and game state updates, deterine scores
+  // const updateGameState = (id: string) => {
+  //   if (id !== gameState.currentPlayer) return;
 
-    players[id].score += 1;
+  //   players[id].score += 1;
 
-    // Switch current player
-    const playerKeys = Object.keys(players);
-    gameState.currentPlayer = playerKeys[1 - playerKeys.indexOf(id)]; // Switch players
+  //   // Switch current player
+  //   const playerKeys = Object.keys(players);
+  //   gameState.currentPlayer = playerKeys[1 - playerKeys.indexOf(id)]; // Switch players
 
-    console.log(`Player score:${id} : ${players[id].score}`);
-    io.emit("score-updated", players);
+  //   console.log(`Player score:${id} : ${players[id].score}`);
+  //   io.emit("score-updated", players);
+  //   io.emit("game-state-updated", gameState);
+  //   console.log("Game status: ", gameState);
+  // };
+
+  // socket.on("changeScore", updateGameState);
+
+  socket.on("board-state-updated", (updatedBoard) => {
+    // console.log("Received updated board state:", updatedBoard);
+    gameState.board = updatedBoard;
     io.emit("game-state-updated", gameState);
-    console.log("Game status: ", gameState);
-  };
+  });
 
-  // Listen to the "changeScore" event
-  socket.on("changeScore", updateGameState);
+  // Handle Game Status: win, draw
 
-  // Handle player disconnection
   socket.on("disconnect", () => {
     delete players[socket.id];
     console.log(
