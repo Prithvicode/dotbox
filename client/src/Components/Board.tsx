@@ -47,6 +47,9 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
 
   let boxSides: BoxSides = {}; // To check Box Wall
 
+  let currentPlayerColor =
+    gameState.players[gameState.currentPlayer]?.color || "transparent"; // can make currentPlayer = player insted of playerId
+
   useEffect(() => {
     gameState.board.forEach((row, rowIndex) => {
       row.forEach((box, colIndex) => {
@@ -132,18 +135,30 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
         }
 
         // Draw Dots
-        drawDot(ctx, x1, y1); // Top-left corner
-        drawDot(ctx, x1 + width, y1); // Top-right corner
-        drawDot(ctx, x1, y1 + height); // Bottom-left corner
-        drawDot(ctx, x1 + width, y1 + height); // Bottom-right corner of each box.
+        drawDot(ctx, x1, y1, currentPlayerColor); // Top-left corner
+        drawDot(ctx, x1 + width, y1, currentPlayerColor); // Top-right corner
+        drawDot(ctx, x1, y1 + height, currentPlayerColor); // Bottom-left corner
+        drawDot(ctx, x1 + width, y1 + height, currentPlayerColor); // Bottom-right corner of each box.
       });
     });
   }, [gameState]);
 
-  function drawDot(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  function drawDot(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    color: string
+  ) {
+    ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 5;
+    ctx.shadowOffsetY = 5;
+
     ctx.beginPath();
-    ctx.arc(x, y, 6, 0, Math.PI * 2);
-    ctx.fillStyle = "black";
+    ctx.arc(x, y, 10, 0, Math.PI * 2);
+    ctx.strokeStyle = color ? color : "white";
+    ctx.stroke();
+    ctx.fillStyle = "lightgray";
     ctx.fill();
     ctx.closePath();
   }
@@ -153,11 +168,16 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
     start: { x: number; y: number },
     end: { x: number; y: number }
   ) {
+    ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 5;
+    ctx.shadowOffsetY = 5;
+
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);
     ctx.lineTo(end.x, end.y);
     ctx.strokeStyle = "gray";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 8;
     ctx.stroke();
     ctx.closePath();
   }
@@ -362,19 +382,21 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
     if (j < gameState.board[i].length - 1) checkAndAddBox(i, j + 1); // Right neighbor
 
     if (completedBoxes.length > 0) {
+      // completedBoxes.forEach((boxData) => {
       socket.emit("box-completed", completedBoxes);
       // console.log(
       //   `Box completed by ${gameState.currentPlayer} at (${boxData.row}, ${boxData.col})`
       // );
+      // });
     }
   };
 
   return (
     <canvas
       ref={canvasRef}
-      width={500}
-      height={500}
-      className="border-2 border-black cursor-pointer"
+      width={390}
+      height={320}
+      className="border-4 border-black bg-black/80 rounded-lg mx-auto "
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
     ></canvas>

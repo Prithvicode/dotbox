@@ -74,10 +74,10 @@ const initBoard = (
   return board;
 };
 
-const gameState = {
+var gameState = {
   players,
   currentPlayer: "",
-  board: initBoard(3, 3, 20, 20, 60, 60),
+  board: initBoard(1, 1, 20, 20, 70, 70),
   isGameOver: false,
   winner: "",
 };
@@ -86,6 +86,25 @@ gameState.board.forEach((row) => {
     console.log(box);
   });
 });
+
+const setInitialGameState = () => {
+  gameState = {
+    players,
+    currentPlayer: Object.keys(players)[0], // set to first player
+    board: initBoard(1, 1, 20, 20, 70, 70),
+    isGameOver: false,
+    winner: "",
+  };
+  // gameState.board.forEach((row) => {
+  //   row.forEach((box) => {
+  //     console.log(box);
+  //   });
+  // });
+
+  Object.keys(players).forEach((key) => {
+    players[key].score = 0;
+  });
+};
 
 // ======================= EVENTS =============================
 
@@ -208,6 +227,12 @@ io.on("connection", (socket) => {
     }
   };
 
+  socket.on("play-again", () => {
+    setInitialGameState();
+    io.emit("game-state-updated", gameState);
+    io.emit("game-over", gameState);
+  });
+
   socket.on("disconnect", () => {
     delete players[socket.id];
     console.log(
@@ -220,6 +245,7 @@ io.on("connection", (socket) => {
 
     // If a player disconnects, update currentPlayer to the remaining player
     if (Object.keys(players).length === 1) {
+      setInitialGameState();
       gameState.currentPlayer = Object.keys(players)[0];
       io.emit("game-state-updated", gameState);
     }
