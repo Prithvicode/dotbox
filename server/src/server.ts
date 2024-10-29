@@ -21,6 +21,7 @@ const io = new Server(server, {
 
 interface Player {
   score: number;
+  color: string;
 }
 
 const players: Record<string, Player> = {};
@@ -62,7 +63,7 @@ const initBoard = (
         y1: startY + i * height,
         height: height,
         width: width,
-        color: "gray",
+        color: "transparent",
         isCompleted: false,
         completedBy: "",
       };
@@ -99,8 +100,18 @@ io.on("connection", (socket) => {
   }
 
   // Add the new player
-  players[socket.id] = { score: 0 };
+  if (Object.keys(players).length > 0) {
+    const firstPlayerKey = Object.keys(players)[0];
+    const firstPlayerColor = players[firstPlayerKey].color;
+    players[socket.id] = {
+      score: 0,
+      color: firstPlayerColor === "#66C1E9" ? "#E88F91" : "#66C1E9",
+    };
+  } else {
+    players[socket.id] = { score: 0, color: "#66C1E9" };
+  }
 
+  console.log(players);
   // Set Current Player to the first player who connected
   if (Object.keys(players).length === 1) {
     gameState.currentPlayer = socket.id;
@@ -115,16 +126,18 @@ io.on("connection", (socket) => {
     col: number;
     box: Box;
     completedBy: string;
+    color: string;
   }
   socket.on("box-completed", (completedBoxes) => {
     completedBoxes.forEach((boxData: completedBox) => {
-      const { row, col, completedBy } = boxData;
+      const { row, col, completedBy, color } = boxData;
       if (gameState.players[completedBy]) {
         gameState.players[completedBy].score += 10;
       }
 
       gameState.board[row][col].isCompleted = true;
       gameState.board[row][col].completedBy = completedBy;
+      gameState.board[row][col].color = color;
 
       console.log("Completed box:", gameState.board[row][col]);
       console.log(

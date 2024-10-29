@@ -19,7 +19,7 @@ interface Box {
 interface GameState {
   board: Box[][];
   currentPlayer: string;
-  players: Record<string, { score: number }>;
+  players: Record<string, { score: number; color: string }>;
 }
 
 interface BoardProps {
@@ -101,12 +101,14 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
           rightWall,
           topWall,
           bottomWall,
+          color,
         } = box;
 
         // Draw Boxes
         ctx.strokeStyle = "transparent";
         ctx.strokeRect(x1, y1, width, height); // Draw the border
-
+        ctx.fillStyle = color;
+        ctx.fillRect(x1, y1, width, height);
         // Draw available lines based on wall states
         if (leftWall) {
           drawLine(ctx, { x: x1, y: y1 }, { x: x1, y: y1 + height });
@@ -154,7 +156,7 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);
     ctx.lineTo(end.x, end.y);
-    ctx.strokeStyle = "black";
+    ctx.strokeStyle = "gray";
     ctx.lineWidth = 2;
     ctx.stroke();
     ctx.closePath();
@@ -324,6 +326,7 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
     col: number;
     box: Box;
     completedBy: string;
+    color: string;
   }
 
   const checkBoxCompletion = (i: number, j: number) => {
@@ -344,6 +347,7 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
           col,
           box,
           completedBy: gameState.currentPlayer,
+          color: gameState.players[gameState.currentPlayer].color,
         });
 
         box.isCompleted = true;
@@ -358,12 +362,10 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
     if (j < gameState.board[i].length - 1) checkAndAddBox(i, j + 1); // Right neighbor
 
     if (completedBoxes.length > 0) {
-      // completedBoxes.forEach((boxData) => {
       socket.emit("box-completed", completedBoxes);
       // console.log(
       //   `Box completed by ${gameState.currentPlayer} at (${boxData.row}, ${boxData.col})`
       // );
-      // });
     }
   };
 
@@ -372,7 +374,7 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
       ref={canvasRef}
       width={500}
       height={500}
-      className="border-2 border-black"
+      className="border-2 border-black cursor-pointer"
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
     ></canvas>

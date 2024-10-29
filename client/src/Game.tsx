@@ -6,6 +6,7 @@ const socket: Socket = io("http://localhost:5001");
 
 interface Player {
   score: number;
+  color: string;
 }
 
 interface Box {
