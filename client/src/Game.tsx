@@ -90,18 +90,34 @@ const Game: React.FunctionComponent = () => {
   // ======================= USER EVENTS =============================
   const handlePlayAgain = () => {
     console.log("Button clicked by:", { playerId });
+
+    // Emit an event to reset the game state on the server
     socket.emit("play-again", gameState);
+
+    // Reset local state
     setGameOver(false);
+    setPlayers({});
+    setCurrentPlayer(null);
+    setGameState(gameState);
+    console.log(gameState);
   };
   return (
     <>
-      <div className="border-2 border-black m-5 flex flex-col items-center">
-        <h1 className="text-3xl font-bold">Dot Box Game</h1>
+      <div className=" border-2 border-gray-400 rounded-lg shadow-2xl  shadow-blue-400 md:m-5 max-md:m-1  h-[750px] max-w-screen-sm p-1 flex flex-col items-center md:w-[900px] md:mx-auto md:h-[570px] space-y-3">
+        <div className="">
+          <h1 className="text-3xl font-bold text-blue-800 py-1">
+            Dot Box Game
+          </h1>
+          <h1 className="text-3xl font-bold relative -top-9 left-1 text-p2 -z-10">
+            Dot Box Game
+          </h1>
+        </div>
+
         {message ? (
           <div>{message}</div>
         ) : (
-          <div className="border-2 w-full">
-            <div className="flex justify-around border-2 w-full ">
+          <div className=" w-full relative flex flex-col justify-center items-center">
+            <div className="flex justify-around  w-full ">
               {Object.entries(players).map(([id, player]) => (
                 <div
                   key={id}
@@ -114,7 +130,7 @@ const Game: React.FunctionComponent = () => {
                   >
                     <img src={playerImage} alt="" height={20} width={20} />
                   </div>
-                  <div className="bg-black/70 relative -left-4 text-white px-3 -z-10 rounded-r-lg">
+                  <div className="bg-black/70 relative -left-4 text-white px-3 -z-10 rounded-r-lg text-sm sm:text-lg">
                     {socket.id == id
                       ? "Your Score: " + player.score
                       : "Opp Score: " + player.score}
@@ -123,7 +139,7 @@ const Game: React.FunctionComponent = () => {
               ))}
             </div>
             {/* Player Turn  */}
-            <div className="border-2 text-center flex justify-center items-center space-x-7 mb-5">
+            <div className=" mt-3 text-center flex justify-center items-center space-x-5 mb-5">
               <span className="text-3xl font-bold">Turn: </span>
 
               {gameState && gameState.currentPlayer ? (
@@ -143,28 +159,33 @@ const Game: React.FunctionComponent = () => {
             </div>
             {/* Wait for player 2 to join */}
             {Object.keys(players).length < 2 ? (
-              <div> Wait for player 2 to be connected.....</div>
+              <div className="text-center">
+                {" "}
+                Wait for player 2 to be connected.....
+              </div>
             ) : (
               <div className="">
                 {gameState && <Board gameState={gameState} socket={socket} />}
               </div>
             )}
-            <div>
-              {gameOver && (
-                <div>
-                  {" "}
-                  Game is over
-                  {/* Show Winner */}
-                  {gameState?.isGameOver && gameState.winner == "draw" ? (
-                    <div> It is draw</div>
-                  ) : (
-                    // Dispaly winner
-                    <div>{gameState?.winner}</div>
-                  )}
-                  <button onClick={handlePlayAgain}>Play again</button>
-                </div>
-              )}
-            </div>
+            {gameOver && (
+              <div className="border-2 border-black text-center flex justify-center flex-col gap-2 p-4 bg-s1/50 rounded-lg shadow-2xl backdrop-blur-lg z-10 absolute">
+                <h1 className="text-3xl font-bold">Game Over</h1>
+                {gameState?.isGameOver && gameState.winner === "draw" ? (
+                  <div> Draw</div>
+                ) : (
+                  <div className="text-3xl font-bold">
+                    {gameState?.winner === socket.id ? "You Won!" : "You Lose!"}
+                  </div>
+                )}
+                <button
+                  onClick={handlePlayAgain}
+                  className="bg-blue-500 py-2 rounded-full px-7 hover:bg-blue-700 shadow-lg text-white text-lg font-bold"
+                >
+                  <span>Play again</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

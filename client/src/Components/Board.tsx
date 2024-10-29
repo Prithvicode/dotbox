@@ -200,8 +200,6 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
   }
 
   // =============== EVENTS =================
-  // Disable the event if currentPlayer != socket.id
-  // Toggle the current Player
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (socket.id != gameState.currentPlayer) return;
@@ -218,10 +216,10 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
     for (const key in boxCorners) {
       boxCorners[key].forEach((dot) => {
         if (
-          mouseX - dot.x < 10 &&
-          mouseX - dot.x > -10 &&
-          mouseY - dot.y < 10 &&
-          mouseY - dot.y > -10
+          mouseX - dot.x < 20 &&
+          mouseX - dot.x > -20 &&
+          mouseY - dot.y < 20 &&
+          mouseY - dot.y > -20
         ) {
           startDot = { x: dot.x, y: dot.y };
           //   console.log("Start dot: ", startDot);
@@ -246,10 +244,10 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
     for (const key in boxCorners) {
       boxCorners[key].forEach((dot) => {
         if (
-          mouseX - dot.x < 10 &&
-          mouseX - dot.x > -10 &&
-          mouseY - dot.y < 10 &&
-          mouseY - dot.y > -10
+          mouseX - dot.x < 20 &&
+          mouseX - dot.x > -20 &&
+          mouseY - dot.y < 20 &&
+          mouseY - dot.y > -20
         ) {
           endDot = { x: dot.x, y: dot.y };
         }
@@ -287,6 +285,84 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
     }
   };
 
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    // e.preventDefault();
+    console.log("touch start pressed");
+    if (socket.id != gameState.currentPlayer) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0]; // Get the first touch point
+    const mouseX = touch.clientX - rect.left;
+    const mouseY = touch.clientY - rect.top;
+    for (const key in boxCorners) {
+      boxCorners[key].forEach((dot) => {
+        if (
+          mouseX - dot.x < 40 &&
+          mouseX - dot.x > -40 &&
+          mouseY - dot.y < 40 &&
+          mouseY - dot.y > -40
+        ) {
+          startDot = { x: dot.x, y: dot.y };
+          //   console.log("Start dot: ", startDot);
+        }
+      });
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (socket.id != gameState.currentPlayer) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.changedTouches[0]; // Get the first touch point
+    const mouseX = touch.clientX - rect.left;
+    const mouseY = touch.clientY - rect.top;
+    console.log({ mouseY, mouseX });
+    let isMoveValid = false;
+
+    console.log(gameState.board);
+    for (const key in boxCorners) {
+      boxCorners[key].forEach((dot) => {
+        if (
+          mouseX - dot.x < 40 &&
+          mouseX - dot.x > -40 &&
+          mouseY - dot.y < 40 &&
+          mouseY - dot.y > -40
+        ) {
+          endDot = { x: dot.x, y: dot.y };
+        }
+      });
+    }
+
+    // Update the game state if a valid line is drawn
+    if (startDot && endDot) {
+      for (const key in boxSides) {
+        boxSides[key].forEach((side, index) => {
+          if (
+            (startDot.x === side.dot1.x &&
+              startDot.y === side.dot1.y &&
+              endDot.x === side.dot2.x &&
+              endDot.y === side.dot2.y) ||
+            (startDot.x === side.dot2.x &&
+              startDot.y === side.dot2.y &&
+              endDot.x === side.dot1.x &&
+              endDot.y === side.dot1.y)
+          ) {
+            isMoveValid = true;
+            // Determine the box indices from the key ("box-1-2")
+            const [, rowIndex, colIndex] = key.split("-");
+            const i = parseInt(rowIndex);
+            const j = parseInt(colIndex);
+
+            updateWallState(i, j, index);
+            mouseUpSound.current?.play();
+          }
+        });
+      }
+    }
+  };
   const updateWallState = (i: number, j: number, sideIndex: number) => {
     const updatedBoard = [...gameState.board];
     const box = updatedBoard[i][j];
@@ -422,9 +498,11 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
       ref={canvasRef}
       width={410}
       height={330}
-      className="border-4 border-black bg-black/80 rounded-lg mx-auto cursor-pointer "
+      className="border-4 border-black bg-black/70 rounded-lg mx-auto cursor-pointer  " // max-sm:max-w-[350px]
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
     ></canvas>
   );
 };
