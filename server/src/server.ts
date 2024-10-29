@@ -21,6 +21,7 @@ const io = new Server(server, {
 
 interface Player {
   score: number;
+  color: string;
 }
 
 const players: Record<string, Player> = {};
@@ -62,7 +63,7 @@ const initBoard = (
         y1: startY + i * height,
         height: height,
         width: width,
-        color: "gray",
+        color: "transparent",
         isCompleted: false,
         completedBy: "",
       };
@@ -73,16 +74,37 @@ const initBoard = (
   return board;
 };
 
-const gameState = {
+var gameState = {
   players,
   currentPlayer: "",
-  board: initBoard(3, 3, 20, 20, 60, 60),
+  board: initBoard(4, 5, 20, 20, 70, 70),
+  isGameOver: false,
+  winner: "",
 };
 gameState.board.forEach((row) => {
   row.forEach((box) => {
     console.log(box);
   });
 });
+
+const setInitialGameState = () => {
+  gameState = {
+    players,
+    currentPlayer: Object.keys(players)[0], // set to first player
+    board: initBoard(4, 5, 25, 25, 70, 70),
+    isGameOver: false,
+    winner: "",
+  };
+  // gameState.board.forEach((row) => {
+  //   row.forEach((box) => {
+  //     console.log(box);
+  //   });
+  // });
+
+  Object.keys(players).forEach((key) => {
+    players[key].score = 0;
+  });
+};
 
 // ======================= EVENTS =============================
 
@@ -97,44 +119,119 @@ io.on("connection", (socket) => {
   }
 
   // Add the new player
-  players[socket.id] = { score: 0 };
+  if (Object.keys(players).length > 0) {
+    const firstPlayerKey = Object.keys(players)[0];
+    const firstPlayerColor = players[firstPlayerKey].color;
+    players[socket.id] = {
+      score: 0,
+      color: firstPlayerColor === "#66C1E9" ? "#E88F91" : "#66C1E9",
+    };
+  } else {
+    players[socket.id] = { score: 0, color: "#66C1E9" };
+  }
 
+  console.log(players);
   // Set Current Player to the first player who connected
   if (Object.keys(players).length === 1) {
     gameState.currentPlayer = socket.id;
   }
 
-  io.emit("player-joined", players);
+  // io.emit("player-joined", gameState.players);
 
   io.emit("initial-game-state", gameState);
 
-  // console.log(players);
+  interface completedBox {
+    row: number;
+    col: number;
+    box: Box;
+    completedBy: string;
+    color: string;
+  }
+  socket.on("box-completed", (completedBoxes) => {
+    completedBoxes.forEach((boxData: completedBox) => {
+      const { row, col, completedBy, color } = boxData;
+      if (gameState.players[completedBy]) {
+        gameState.players[completedBy].score += 10;
+      }
 
-  // Handle score and game state updates, deterine scores
-  // const updateGameState = (id: string) => {
-  //   if (id !== gameState.currentPlayer) return;
+      gameState.board[row][col].isCompleted = true;
+      gameState.board[row][col].completedBy = completedBy;
+      gameState.board[row][col].color = color;
 
-  //   players[id].score += 1;
+      console.log("Completed box:", gameState.board[row][col]);
+      console.log(
+        `Completed by: ${completedBy}, score: ${gameState.players[completedBy].score}`
+      );
+    });
 
-  //   // Switch current player
-  //   const playerKeys = Object.keys(players);
-  //   gameState.currentPlayer = playerKeys[1 - playerKeys.indexOf(id)]; // Switch players
+    // Toggle current player
+    const playerKeys = Object.keys(players);
+    gameState.currentPlayer =
+      playerKeys[1 - playerKeys.indexOf(gameState.currentPlayer)];
 
-  //   console.log(`Player score:${id} : ${players[id].score}`);
-  //   io.emit("score-updated", players);
-  //   io.emit("game-state-updated", gameState);
-  //   console.log("Game status: ", gameState);
-  // };
+    checkGameStatus();
 
-  // socket.on("changeScore", updateGameState);
-
-  socket.on("board-state-updated", (updatedBoard) => {
-    // console.log("Received updated board state:", updatedBoard);
-    gameState.board = updatedBoard;
+    // Emit updated game state
     io.emit("game-state-updated", gameState);
+    console.log("Players:", gameState.players);
+    console.log(
+      "Current player after box completion:",
+      gameState.currentPlayer
+    );
   });
 
-  // Handle Game Status: win, draw
+  socket.on("board-state-updated", (updatedGameState) => {
+    // console.log("Received updated board state:", updatedBoard);
+    gameState.board = updatedGameState.board;
+
+    // Toggle currentPlayer
+    const playerKeys = Object.keys(players);
+    gameState.currentPlayer =
+      playerKeys[1 - playerKeys.indexOf(updatedGameState.currentPlayer)]; // Switch players
+
+    io.emit("game-state-updated", gameState);
+    console.log(gameState.players);
+    console.log("CurrentPlayer from boardUpate:", gameState.currentPlayer);
+  });
+
+  const checkGameStatus = () => {
+    let allBoxesCompleted = true;
+    for (let row of gameState.board) {
+      for (let box of row) {
+        if (!box.isCompleted) {
+          allBoxesCompleted = false;
+          break;
+        }
+      }
+    }
+    if (allBoxesCompleted) {
+      gameState.isGameOver = true;
+      determineWinner();
+      io.emit("game-over", gameState);
+      console.log("Game Over. Winner:", gameState.winner);
+    }
+  };
+
+  const determineWinner = () => {
+    const playerKeys = Object.keys(players);
+    const [player1, player2] = playerKeys;
+
+    if (gameState.players[player1].score > gameState.players[player2].score) {
+      gameState.winner = player1;
+    } else if (
+      gameState.players[player1].score < gameState.players[player2].score
+    ) {
+      gameState.winner = player2;
+    } else {
+      gameState.winner = "draw";
+    }
+  };
+
+  socket.on("play-again", () => {
+    setInitialGameState();
+    io.emit("game-state-updated", gameState);
+    io.emit("game-over", gameState);
+  });
 
   socket.on("disconnect", () => {
     delete players[socket.id];
@@ -148,6 +245,7 @@ io.on("connection", (socket) => {
 
     // If a player disconnects, update currentPlayer to the remaining player
     if (Object.keys(players).length === 1) {
+      setInitialGameState();
       gameState.currentPlayer = Object.keys(players)[0];
       io.emit("game-state-updated", gameState);
     }

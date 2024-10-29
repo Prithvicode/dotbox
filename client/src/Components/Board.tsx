@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 
 // Refact: redundant codes, choose proper data structure, modules or class (methods)
 
@@ -19,7 +19,7 @@ interface Box {
 interface GameState {
   board: Box[][];
   currentPlayer: string;
-  players: Record<string, { score: number }>;
+  players: Record<string, { score: number; color: string }>;
 }
 
 interface BoardProps {
@@ -47,7 +47,21 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
 
   let boxSides: BoxSides = {}; // To check Box Wall
 
+  let currentPlayerColor =
+    gameState.players[gameState.currentPlayer]?.color || "transparent"; // can make currentPlayer = player insted of playerId
+
+  // Audio
+  const mouseDownSound = useRef<HTMLAudioElement | null>(null);
+  const mouseUpSound = useRef<HTMLAudioElement | null>(null);
+  const invalidMoveSound = useRef<HTMLAudioElement | null>(null);
+
   useEffect(() => {
+    // Initialize audio
+    mouseDownSound.current = new Audio("/audio/click.mp3");
+    mouseUpSound.current = new Audio("/audio/release.mp3");
+    invalidMoveSound.current = new Audio("/audio/error.mp3");
+
+    // Initialize board
     gameState.board.forEach((row, rowIndex) => {
       row.forEach((box, colIndex) => {
         const { x1, y1, width, height } = box;
@@ -74,6 +88,12 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
         ];
       });
     });
+    return () => {
+      mouseDownSound.current?.pause();
+      mouseDownSound.current = null;
+      // mouseUpSound.current?.pause();
+      // mouseUpSound.current = null;
+    };
 
     // console.log(boxCorners);
     // console.log(boxSides);
@@ -101,12 +121,14 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
           rightWall,
           topWall,
           bottomWall,
+          color,
         } = box;
 
         // Draw Boxes
         ctx.strokeStyle = "transparent";
         ctx.strokeRect(x1, y1, width, height); // Draw the border
-
+        ctx.fillStyle = color;
+        ctx.fillRect(x1, y1, width, height);
         // Draw available lines based on wall states
         if (leftWall) {
           drawLine(ctx, { x: x1, y: y1 }, { x: x1, y: y1 + height });
@@ -130,18 +152,30 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
         }
 
         // Draw Dots
-        drawDot(ctx, x1, y1); // Top-left corner
-        drawDot(ctx, x1 + width, y1); // Top-right corner
-        drawDot(ctx, x1, y1 + height); // Bottom-left corner
-        drawDot(ctx, x1 + width, y1 + height); // Bottom-right corner of each box.
+        drawDot(ctx, x1, y1, currentPlayerColor); // Top-left corner
+        drawDot(ctx, x1 + width, y1, currentPlayerColor); // Top-right corner
+        drawDot(ctx, x1, y1 + height, currentPlayerColor); // Bottom-left corner
+        drawDot(ctx, x1 + width, y1 + height, currentPlayerColor); // Bottom-right corner of each box.
       });
     });
   }, [gameState]);
 
-  function drawDot(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  function drawDot(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    color: string
+  ) {
+    ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 5;
+    ctx.shadowOffsetY = 5;
+
     ctx.beginPath();
-    ctx.arc(x, y, 6, 0, Math.PI * 2);
-    ctx.fillStyle = "black";
+    ctx.arc(x, y, 10, 0, Math.PI * 2);
+    ctx.strokeStyle = color ? color : "white";
+    ctx.stroke();
+    ctx.fillStyle = "lightgray";
     ctx.fill();
     ctx.closePath();
   }
@@ -151,17 +185,24 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
     start: { x: number; y: number },
     end: { x: number; y: number }
   ) {
+    ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 5;
+    ctx.shadowOffsetY = 5;
+
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);
     ctx.lineTo(end.x, end.y);
-    ctx.strokeStyle = "black";
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = "gray";
+    ctx.lineWidth = 8;
     ctx.stroke();
     ctx.closePath();
   }
 
   // =============== EVENTS =================
+
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (socket.id != gameState.currentPlayer) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -175,35 +216,40 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
     for (const key in boxCorners) {
       boxCorners[key].forEach((dot) => {
         if (
-          mouseX - dot.x < 10 &&
-          mouseX - dot.x > -10 &&
-          mouseY - dot.y < 10 &&
-          mouseY - dot.y > -10
+          mouseX - dot.x < 20 &&
+          mouseX - dot.x > -20 &&
+          mouseY - dot.y < 20 &&
+          mouseY - dot.y > -20
         ) {
           startDot = { x: dot.x, y: dot.y };
           //   console.log("Start dot: ", startDot);
         }
       });
     }
+
+    // Play mouse down sound
+    mouseDownSound.current?.play();
   };
 
   const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (socket.id != gameState.currentPlayer) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
 
+    let isMoveValid = false;
+
     for (const key in boxCorners) {
       boxCorners[key].forEach((dot) => {
         if (
-          mouseX - dot.x < 10 &&
-          mouseX - dot.x > -10 &&
-          mouseY - dot.y < 10 &&
-          mouseY - dot.y > -10
+          mouseX - dot.x < 20 &&
+          mouseX - dot.x > -20 &&
+          mouseY - dot.y < 20 &&
+          mouseY - dot.y > -20
         ) {
           endDot = { x: dot.x, y: dot.y };
-          //   console.log("End Dot: ", endDot);
         }
       });
     }
@@ -222,71 +268,241 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
               endDot.x === side.dot1.x &&
               endDot.y === side.dot1.y)
           ) {
+            isMoveValid = true;
             // Determine the box indices from the key ("box-1-2")
             const [, rowIndex, colIndex] = key.split("-");
             const i = parseInt(rowIndex);
             const j = parseInt(colIndex);
 
             updateWallState(i, j, index);
+            mouseUpSound.current?.play();
+          }
+        });
+      }
+    }
+    if (!isMoveValid) {
+      invalidMoveSound.current?.play();
+    }
+  };
 
-            checkBoxCompletion(i, j);
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    // e.preventDefault();
+    console.log("touch start pressed");
+    if (socket.id != gameState.currentPlayer) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0]; // Get the first touch point
+    const mouseX = touch.clientX - rect.left;
+    const mouseY = touch.clientY - rect.top;
+    for (const key in boxCorners) {
+      boxCorners[key].forEach((dot) => {
+        if (
+          mouseX - dot.x < 40 &&
+          mouseX - dot.x > -40 &&
+          mouseY - dot.y < 40 &&
+          mouseY - dot.y > -40
+        ) {
+          startDot = { x: dot.x, y: dot.y };
+          //   console.log("Start dot: ", startDot);
+        }
+      });
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (socket.id != gameState.currentPlayer) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.changedTouches[0]; // Get the first touch point
+    const mouseX = touch.clientX - rect.left;
+    const mouseY = touch.clientY - rect.top;
+    console.log({ mouseY, mouseX });
+    let isMoveValid = false;
+
+    console.log(gameState.board);
+    for (const key in boxCorners) {
+      boxCorners[key].forEach((dot) => {
+        if (
+          mouseX - dot.x < 40 &&
+          mouseX - dot.x > -40 &&
+          mouseY - dot.y < 40 &&
+          mouseY - dot.y > -40
+        ) {
+          endDot = { x: dot.x, y: dot.y };
+        }
+      });
+    }
+
+    // Update the game state if a valid line is drawn
+    if (startDot && endDot) {
+      for (const key in boxSides) {
+        boxSides[key].forEach((side, index) => {
+          if (
+            (startDot.x === side.dot1.x &&
+              startDot.y === side.dot1.y &&
+              endDot.x === side.dot2.x &&
+              endDot.y === side.dot2.y) ||
+            (startDot.x === side.dot2.x &&
+              startDot.y === side.dot2.y &&
+              endDot.x === side.dot1.x &&
+              endDot.y === side.dot1.y)
+          ) {
+            isMoveValid = true;
+            // Determine the box indices from the key ("box-1-2")
+            const [, rowIndex, colIndex] = key.split("-");
+            const i = parseInt(rowIndex);
+            const j = parseInt(colIndex);
+
+            updateWallState(i, j, index);
+            mouseUpSound.current?.play();
           }
         });
       }
     }
   };
-
   const updateWallState = (i: number, j: number, sideIndex: number) => {
     const updatedBoard = [...gameState.board];
     const box = updatedBoard[i][j];
+    let isWallUpdated = false;
 
     switch (sideIndex) {
-      case 0:
-        box.leftWall = true;
+      case 0: // Left wall
+        if (!box.leftWall) {
+          box.leftWall = true;
+          isWallUpdated = true;
+
+          // Update right wall of the previous box if it exists
+          if (j > 0) {
+            const previousBox = updatedBoard[i][j - 1];
+            previousBox.rightWall = true;
+          }
+        }
         break;
-      case 1:
-        box.rightWall = true;
+
+      case 1: // Right wall
+        if (!box.rightWall) {
+          box.rightWall = true;
+          isWallUpdated = true;
+
+          // Update left wall of the next box if it exists
+          if (j < updatedBoard[i].length - 1) {
+            const nextBox = updatedBoard[i][j + 1];
+            nextBox.leftWall = true;
+          }
+        }
         break;
-      case 2:
-        box.bottomWall = true;
+
+      case 2: // Bottom wall
+        if (!box.bottomWall) {
+          box.bottomWall = true;
+          isWallUpdated = true;
+
+          // Update top wall of the box below if it exists
+          if (i < updatedBoard.length - 1) {
+            const nextBox = updatedBoard[i + 1][j];
+            nextBox.topWall = true;
+          }
+        }
         break;
-      case 3:
-        box.topWall = true;
+
+      case 3: // Top wall
+        if (!box.topWall) {
+          box.topWall = true;
+          isWallUpdated = true;
+
+          // Update bottom wall of the box above if it exists
+          if (i > 0) {
+            const previousBox = updatedBoard[i - 1][j];
+            previousBox.bottomWall = true;
+          }
+        }
         break;
+
       default:
-        break;
+        console.log("Invalid side index");
+        return;
     }
 
-    // Update the game state
-    gameState.board = updatedBoard;
+    if (isWallUpdated) {
+      // Update game state and emit the updated board
+      gameState.board = updatedBoard;
+      socket.emit("board-state-updated", gameState);
+      console.log("Wall updated at:", i, j, "side:", sideIndex);
 
-    // Emit board state to server
-    socket.emit("board-state-updated", updatedBoard);
-    // console.log("Board updated:", gameState.board);
+      checkBoxCompletion(i, j);
+    } else {
+      console.log(
+        "Invalid move. Wall already exists at:",
+        i,
+        j,
+        "side:",
+        sideIndex
+      );
+    }
   };
+  interface CompletedBoxData {
+    row: number;
+    col: number;
+    box: Box;
+    completedBy: string;
+    color: string;
+  }
 
   const checkBoxCompletion = (i: number, j: number) => {
-    const box = gameState.board[i][j];
-    if (box.topWall && box.bottomWall && box.leftWall && box.rightWall) {
-      box.isCompleted = true;
-      box.completedBy = gameState.currentPlayer;
+    const completedBoxes: CompletedBoxData[] = [];
 
-      // Update the player's score, determine hwo much score.
-      //   gameState.players[gameState.currentPlayer].score += 1;
-      console.log(
-        `Box completed by ${gameState.currentPlayer} at (${i}, ${j})`
-      );
+    const checkAndAddBox = (row: number, col: number) => {
+      const box = gameState.board[row]?.[col];
+      if (
+        box &&
+        box.topWall &&
+        box.bottomWall &&
+        box.leftWall &&
+        box.rightWall &&
+        !box.isCompleted
+      ) {
+        completedBoxes.push({
+          row,
+          col,
+          box,
+          completedBy: gameState.currentPlayer,
+          color: gameState.players[gameState.currentPlayer].color,
+        });
+
+        box.isCompleted = true;
+      }
+    };
+
+    // Check current and neighboring boxes
+    checkAndAddBox(i, j);
+    if (i > 0) checkAndAddBox(i - 1, j); // Top neighbor
+    if (i < gameState.board.length - 1) checkAndAddBox(i + 1, j); // Bottom neighbor
+    if (j > 0) checkAndAddBox(i, j - 1); // Left neighbor
+    if (j < gameState.board[i].length - 1) checkAndAddBox(i, j + 1); // Right neighbor
+
+    if (completedBoxes.length > 0) {
+      // completedBoxes.forEach((boxData) => {
+      socket.emit("box-completed", completedBoxes);
+      // console.log(
+      //   `Box completed by ${gameState.currentPlayer} at (${boxData.row}, ${boxData.col})`
+      // );
+      // });
     }
   };
 
   return (
     <canvas
       ref={canvasRef}
-      width={500}
-      height={500}
-      className="border-2 border-black"
+      width={410}
+      height={330}
+      className="border-4 border-black bg-black/70 rounded-lg mx-auto cursor-pointer  " // max-sm:max-w-[350px]
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
     ></canvas>
   );
 };
