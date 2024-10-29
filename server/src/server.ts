@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import { Server } from "socket.io";
 import { createServer } from "http";
+import path from "path";
 
 dotenv.config();
 const port = process.env.PORT || 5001;
@@ -257,6 +258,9 @@ io.on("connection", (socket) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// ====================== DEPLOYMENT ===========================
+const __dirname1 = path.resolve();
+
 app.use(
   cors({
     origin: "http://localhost:5173",
@@ -264,9 +268,14 @@ app.use(
   })
 );
 
-app.get("/", (req, res) => {
-  res.send({ message: "Hello from server" });
+app.use(express.static(path.join(__dirname1, "/client/dist")));
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname1, "client", "dist", "index.html"));
 });
+
+// app.get("/", (req, res) => {
+//   res.send({ message: "Hello from server" });
+// });
 
 server.listen(port, () => {
   console.log(`Server created successfully on port ${port}`);
