@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 
 // Refact: redundant codes, choose proper data structure, modules or class (methods)
 
@@ -50,7 +50,18 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
   let currentPlayerColor =
     gameState.players[gameState.currentPlayer]?.color || "transparent"; // can make currentPlayer = player insted of playerId
 
+  // Audio
+  const mouseDownSound = useRef<HTMLAudioElement | null>(null);
+  const mouseUpSound = useRef<HTMLAudioElement | null>(null);
+  const invalidMoveSound = useRef<HTMLAudioElement | null>(null);
+
   useEffect(() => {
+    // Initialize audio
+    mouseDownSound.current = new Audio("/audio/click.mp3");
+    mouseUpSound.current = new Audio("/audio/release.mp3");
+    invalidMoveSound.current = new Audio("/audio/error.mp3");
+
+    // Initialize board
     gameState.board.forEach((row, rowIndex) => {
       row.forEach((box, colIndex) => {
         const { x1, y1, width, height } = box;
@@ -77,6 +88,12 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
         ];
       });
     });
+    return () => {
+      mouseDownSound.current?.pause();
+      mouseDownSound.current = null;
+      // mouseUpSound.current?.pause();
+      // mouseUpSound.current = null;
+    };
 
     // console.log(boxCorners);
     // console.log(boxSides);
@@ -211,6 +228,9 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
         }
       });
     }
+
+    // Play mouse down sound
+    mouseDownSound.current?.play();
   };
 
   const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -221,6 +241,8 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
 
+    let isMoveValid = false;
+
     for (const key in boxCorners) {
       boxCorners[key].forEach((dot) => {
         if (
@@ -230,7 +252,6 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
           mouseY - dot.y > -10
         ) {
           endDot = { x: dot.x, y: dot.y };
-          //   console.log("End Dot: ", endDot);
         }
       });
     }
@@ -249,15 +270,20 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
               endDot.x === side.dot1.x &&
               endDot.y === side.dot1.y)
           ) {
+            isMoveValid = true;
             // Determine the box indices from the key ("box-1-2")
             const [, rowIndex, colIndex] = key.split("-");
             const i = parseInt(rowIndex);
             const j = parseInt(colIndex);
 
             updateWallState(i, j, index);
+            mouseUpSound.current?.play();
           }
         });
       }
+    }
+    if (!isMoveValid) {
+      invalidMoveSound.current?.play();
     }
   };
 
@@ -394,9 +420,9 @@ const Board: React.FC<BoardProps> = ({ gameState, socket }) => {
   return (
     <canvas
       ref={canvasRef}
-      width={390}
-      height={320}
-      className="border-4 border-black bg-black/80 rounded-lg mx-auto "
+      width={410}
+      height={330}
+      className="border-4 border-black bg-black/80 rounded-lg mx-auto cursor-pointer "
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
     ></canvas>

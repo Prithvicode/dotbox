@@ -77,7 +77,7 @@ const initBoard = (
 var gameState = {
   players,
   currentPlayer: "",
-  board: initBoard(1, 1, 20, 20, 70, 70),
+  board: initBoard(4, 5, 20, 20, 70, 70),
   isGameOver: false,
   winner: "",
 };
@@ -91,7 +91,7 @@ const setInitialGameState = () => {
   gameState = {
     players,
     currentPlayer: Object.keys(players)[0], // set to first player
-    board: initBoard(1, 1, 20, 20, 70, 70),
+    board: initBoard(4, 5, 25, 25, 70, 70),
     isGameOver: false,
     winner: "",
   };
